@@ -41,20 +41,68 @@ class OtherAttribute:
         self.name = name
         self.value = value
 
-    def to_dict(self):
+    def toDict(self):
         # convert the other attributes to a dictionary
         return {"name": self.name, "value": self.value}
 
 
 class WidgetRequest:
-    def __init__(self, request_type, request_id, widget_id, owner, label=None, description=None, other_attributes=None):
-        self.request_type = request_type
-        self.request_id = request_id
-        self.widget_id = widget_id
+    # Widget request object (The JSON converted to a Python object)
+    def __init__(self, requestType, requestId, widgetId, owner, label=None, description=None, otherAttributes=None):
+        self.requestType = requestType
+        self.requestId = requestId
+        self.widgetId = widgetId
         self.owner = owner
         self.label = label
         self.description = description
-        self.other_attributes = other_attributes or []
+        self.otherAttributes = otherAttributes or []
+
+
+
+
+class Widget:
+    def __init__(self, widgetId, owner, label=None, description=None,
+                 otherAttributes=None):
+        self.widgetId = widgetId
+        self.owner = owner
+        self.label = label
+        self.description = description
+        self.otherAttributes = otherAttributes or []
+
+    def toDict(self):
+        # Convert the widget to a plain dict
+        otherAttributes = []
+        for attr in self.otherAttributes:
+            otherAttributes.append(attr.toDict())
+
+        return {
+            "id": self.widgetId,
+            "owner": self.owner,
+            "label": self.label,
+            "description": self.description,
+            "otherAttributes": otherAttributes,
+        }
+
+    def toJson(self):
+        # convert the object to a JSON string
+        return json.dumps(self.toDict())
+
+
+
+
+#------- Factories for constructing objects --------
+
+class WidgetFactory:
+    def fromRequest(self, request):
+        # Build a Widget from the data in a WidgetRequest
+        return Widget(
+            widgetId=request.widgetId,
+            owner=request.owner,
+            label=request.label,
+            description=request.description,
+            otherAttributes=list(request.otherAttributes),
+        )
+
 
 
 class WidgetRequestFactory:
@@ -75,57 +123,17 @@ class WidgetRequestFactory:
             raise ParserException("Invalid widget request: " + str(e))
 
         # 2. Add the other attributes to the WidgetRequest
-        other_attributes = []
+        otherAttributes = []
         for attr in data.get("otherAttributes", []):
-            other_attributes.append(OtherAttribute(attr["name"], attr["value"]))
+            otherAttributes.append(OtherAttribute(attr["name"], attr["value"]))
 
         # 3. Create the WidgetRequest object
         return WidgetRequest(
-            request_type=data["type"],
-            request_id=data["requestId"],
-            widget_id=data["widgetId"],
+            requestType=data["type"],
+            requestId=data["requestId"],
+            widgetId=data["widgetId"],
             owner=data["owner"],
             label=data.get("label"),
             description=data.get("description"),
-            other_attributes=other_attributes,
-        )
-
-
-class Widget:
-    def __init__(self, widget_id, owner, label=None, description=None,
-                 other_attributes=None):
-        self.widget_id = widget_id
-        self.owner = owner
-        self.label = label
-        self.description = description
-        self.other_attributes = other_attributes or []
-
-    def to_dict(self):
-        # Convert the widget to a plain dict
-        other_attributes = []
-        for attr in self.other_attributes:
-            other_attributes.append(attr.to_dict())
-
-        return {
-            "id": self.widget_id,
-            "owner": self.owner,
-            "label": self.label,
-            "description": self.description,
-            "otherAttributes": other_attributes,
-        }
-
-    def to_json(self):
-        # convert the object to a JSON string
-        return json.dumps(self.to_dict())
-
-
-class WidgetFactory:
-    def fromRequest(self, request):
-        # Build a Widget from the data in a WidgetRequest
-        return Widget(
-            widget_id=request.widget_id,
-            owner=request.owner,
-            label=request.label,
-            description=request.description,
-            other_attributes=list(request.other_attributes),
+            otherAttributes=otherAttributes,
         )

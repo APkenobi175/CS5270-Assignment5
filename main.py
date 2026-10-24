@@ -16,16 +16,11 @@ logger = logging.getLogger(__name__)
 def parseArgs(argv=None):
     # Read the command-line arguments for the storage strategy and resources to use. Uses argparse so that its easy to parse arguments
     parser = argparse.ArgumentParser(description="Consumes widget requests and stores the widgets")
-    parser.add_argument("--storage", choices=["s3", "dynamodb"], required=True,
-                        help="where to store widgets")
-    parser.add_argument("--request-bucket", required=True,
-                        help="S3 bucket to read widget requests from (Bucket 2)")
-    parser.add_argument("--widget-bucket",
-                        help="S3 bucket to store widgets in (Bucket 3), needed for --storage s3")
-    parser.add_argument("--table", default="widgets",
-                        help="DynamoDB table to store widgets in, used for --storage dynamodb")
-    parser.add_argument("--log-file", default="consumer.log",
-                        help="file to write the log to")
+    parser.add_argument("--storage", choices=["s3", "dynamodb"], required=True, help="where to store widgets")
+    parser.add_argument("--request-bucket", required=True, help="S3 bucket to read widget requests from (Bucket 2)")
+    parser.add_argument("--widget-bucket", help="S3 bucket to store widgets in (Bucket 3), needed for --storage s3")
+    parser.add_argument("--table", default="widgets", help="DynamoDB table to store widgets in, used for --storage dynamodb")
+    parser.add_argument("--log-file", default="consumer.log", help="file to write the log to")
 
     args = parser.parse_args(argv)
     if args.storage == "s3" and args.widget_bucket is None:

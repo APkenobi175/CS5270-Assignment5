@@ -36,7 +36,7 @@ class S3WidgetStoreStrategy(WidgetStoreInterface):
         # Save the widget as a JSON string at widgets/{owner}/{widgetId}
         key = self.widgetKey(widget)
         self.s3Client.put_object(Bucket=self.bucketName, Key=key, Body=widget.toJson())
-        logger.info("Created widget %s in S3 bucket %s at %s", widget.widgetId, self.bucketName, key)
+        logger.info("Created widget " + str(widget.widgetId) + " in S3 bucket " + self.bucketName + " at " + key)
 
     def widgetKey(self, widget):
         # Build the S3 key for a widget
@@ -54,9 +54,10 @@ class DynamoDBWidgetStoreStrategy(WidgetStoreInterface):
         self.table = table
 
     def create(self, widget):
+        
         # Save the widget as a DynamoDB item
         self.table.put_item(Item=self.toItem(widget))
-        logger.info("Created widget %s in DynamoDB table %s", widget.widgetId, self.table.name)
+        logger.info("Created widget " + str(widget.widgetId) + " in DynamoDB table " + self.table.name)
 
     def toItem(self, widget):
         # Build a DynamoDB item where every other attribute is its own top-level attribute

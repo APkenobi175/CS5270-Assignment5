@@ -5,7 +5,7 @@ import json
 import jsonschema
 
 
-# JSON schema for Widget Requests (HW6 Appendix A)
+# JSON schema for widget requests (Appendix A)
 REQUEST_SCHEMA = {
     "type": "object",
     "properties": {
@@ -90,7 +90,7 @@ class Widget:
 
 
 
-#------- Factories for constructing objects --------
+#------- Factories for constructing objects -------- (Factory pattern from cs5700)
 
 class WidgetFactory:
     def fromRequest(self, request):

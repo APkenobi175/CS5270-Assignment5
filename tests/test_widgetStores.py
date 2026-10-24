@@ -74,6 +74,15 @@ def testDynamoCreateStoresItem():
 
         store.create(makeWidget())
 
+        # Each other attribute (color, size) must be its own top-level attribute, not a list
         item = table.get_item(Key={"id": "widget-1"})["Item"]
-        assert item == store.toItem(makeWidget())
+        assert item == {
+            "id": "widget-1",
+            "owner": "Ammon Phipps",
+            "label": "My Label",
+            "description": "My Description",
+            "color": "red",
+            "size": "large",
+        }
+        assert "otherAttributes" not in item
 

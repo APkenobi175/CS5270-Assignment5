@@ -58,6 +58,32 @@ Arguments are managed by python's argparse module.
 
 When reading from SQS, the consumer asks for up to 10 messages at a time using long polling and hands them out one at a time. A message is only deleted from the queue after its request is processed. If processing fails because of an AWS error, the message is left in the queue so it gets tried again after the visibility timeout.
 
+## Running in Docker
+
+Build the image:
+
+```
+docker build -t consumer:1.0 .
+```
+
+The container needs AWS credentials. Fill in `docker.env`, it's in `.gitignore` so copy .example.env to docker.env and edit it with the values from the Learner Lab
+
+```bash
+cp example.env docker.env
+```
+
+then fill it out and run it with that env file.
+
+```bash
+docker run --env-file docker.env consumer:1.0
+```
+
+Other arguments can be passed after the image name, they replace the defaults:
+
+```bash
+docker run --env-file docker.env consumer:1.0 --storage s3 --request-queue cs5270-requests --widget-bucket <widget-bucket>
+```
+
 ## Unit Tests
 
 For this assignment I used pytest as a framework for my unit tests

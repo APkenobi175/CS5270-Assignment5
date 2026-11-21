@@ -1,0 +1,18 @@
+# Keep everything the consumer doesn't need out of the docker build context
+.git/
+.gitignore
+__pycache__/
+.pytest_cache/
+tests/
+pytest.ini
+*.log
+logs/
+producer/
+screenshots*/
+*.pdf
+README.md
+Dockerfile
+.dockerignore
+
+# credentials are passed in with --env-file, never baked into the image
+docker.env

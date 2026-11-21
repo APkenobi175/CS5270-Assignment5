@@ -4,3 +4,6 @@ __pycache__/
 logs/
 
 producer/
+
+# AWS credentials for docker run --env-file, never commit
+docker.env

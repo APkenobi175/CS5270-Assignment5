@@ -1,17 +1,48 @@
 # Unit tests for main.py
 
 import json
+
+import boto3
 import pytest
-from main import parseArgs, processRequest
+from moto import mock_aws
+
+from main import createSource, parseArgs, processNextRequest, processRequest
+from requestSources import S3RequestSourceStrategy, SQSRequestSourceStrategy
 
 
 class FakeStore:
-    # Records the widgets passed to create instead of talking to AWS
-    def __init__(self):
+    # Records what gets passed to each store method instead of talking to AWS
+    def __init__(self, failWith=None):
         self.created = []
+        self.updated = []
+        self.deleted = []
+        self.failWith = failWith
 
     def create(self, widget):
+        if self.failWith is not None:
+            raise self.failWith
         self.created.append(widget)
+
+    def update(self, request):
+        self.updated.append(request)
+
+    def delete(self, request):
+        self.deleted.append(request)
+
+
+class FakeSource:
+    # Hands out the given request texts and records how many times finishRequest was called
+    def __init__(self, texts):
+        self.texts = list(texts)
+        self.finished = 0
+
+    def getNextRequest(self):
+        if len(self.texts) == 0:
+            return None
+        return self.texts.pop(0)
+
+    def finishRequest(self):
+        self.finished += 1
 
 
 def makeRequestText(requestType):
@@ -45,14 +76,26 @@ def testProcessRequestCreateStoresWidget():
     assert widget.otherAttributes[0].value == "red"
 
 
-def testProcessRequestUpdateAndDeleteAreSkipped():
-    # Tests that update and delete requests do not store anything until assignment 7
+def testProcessRequestUpdateGoesToStoreUpdate():
+    # Tests that an update request is passed to the store's update method
     store = FakeStore()
 
     processRequest(makeRequestText("update"), store)
+
+    assert len(store.updated) == 1
+    assert store.updated[0].widgetId == "widget-1"
+    assert store.created == [] and store.deleted == []
+
+
+def testProcessRequestDeleteGoesToStoreDelete():
+    # Tests that a delete request is passed to the store's delete method
+    store = FakeStore()
+
     processRequest(makeRequestText("delete"), store)
 
-    assert store.created == []
+    assert len(store.deleted) == 1
+    assert store.deleted[0].widgetId == "widget-1"
+    assert store.created == [] and store.updated == []
 
 
 def testProcessRequestBadJsonIsSkipped():
@@ -61,7 +104,46 @@ def testProcessRequestBadJsonIsSkipped():
 
     processRequest("{ this is not json", store)
 
-    assert store.created == []
+    assert store.created == [] and store.updated == [] and store.deleted == []
+
+
+#----------------------------
+# processNextRequest Tests
+#----------------------------
+
+def testProcessNextRequestNoRequestReturnsFalse():
+    # Tests that an empty source returns False and finishes nothing
+    source = FakeSource([])
+
+    assert processNextRequest(source, FakeStore()) is False
+    assert source.finished == 0
+
+
+def testProcessNextRequestProcessesAndFinishes():
+    # Tests that a request is processed and then finished (removed from the source)
+    source = FakeSource([makeRequestText("create")])
+    store = FakeStore()
+
+    assert processNextRequest(source, store) is True
+    assert len(store.created) == 1
+    assert source.finished == 1
+
+
+def testProcessNextRequestBadRequestIsFinished():
+    # Tests that a bad request is still finished so it doesn't keep coming back
+    source = FakeSource(["{ this is not json"])
+
+    assert processNextRequest(source, FakeStore()) is True
+    assert source.finished == 1
+
+
+def testProcessNextRequestStoreErrorIsNotFinished():
+    # Tests that a store error is logged, doesn't crash, and leaves the request to be tried again
+    source = FakeSource([makeRequestText("create")])
+    store = FakeStore(failWith=RuntimeError("AWS is down"))
+
+    assert processNextRequest(source, store) is True
+    assert source.finished == 0
 
 
 #----------------------------
@@ -89,3 +171,44 @@ def testParseArgsS3WithoutWidgetBucketFails():
     # Tests that s3 storage without a widget bucket is rejected
     with pytest.raises(SystemExit):
         parseArgs(["--storage", "s3", "--request-bucket", "bucket2"])
+
+
+def testParseArgsRequestQueue():
+    # Tests that a queue name can be given instead of a request bucket, and region defaults to us-east-1
+    args = parseArgs(["--storage", "dynamodb", "--request-queue", "cs5270-requests"])
+
+    assert args.request_queue == "cs5270-requests"
+    assert args.request_bucket is None
+    assert args.region == "us-east-1"
+
+
+def testParseArgsBucketAndQueueFails():
+    # Tests that giving both a request bucket and a request queue is rejected
+    with pytest.raises(SystemExit):
+        parseArgs(["--storage", "dynamodb", "--request-bucket", "bucket2", "--request-queue", "cs5270-requests"])
+
+
+def testParseArgsNoRequestSourceFails():
+    # Tests that leaving out both the request bucket and the request queue is rejected
+    with pytest.raises(SystemExit):
+        parseArgs(["--storage", "dynamodb"])
+
+
+#----------------------------
+# createSource Tests
+#----------------------------
+
+def testCreateSourceQueueGivesSQSStrategy():
+    # Tests that --request-queue picks the SQS request source
+    with mock_aws():
+        boto3.client("sqs", region_name="us-east-1").create_queue(QueueName="cs5270-requests")
+        args = parseArgs(["--storage", "dynamodb", "--request-queue", "cs5270-requests"])
+
+        assert isinstance(createSource(args), SQSRequestSourceStrategy)
+
+
+def testCreateSourceBucketGivesS3Strategy():
+    # Tests that --request-bucket picks the S3 request source
+    args = parseArgs(["--storage", "dynamodb", "--request-bucket", "bucket2"])
+
+    assert isinstance(createSource(args), S3RequestSourceStrategy)

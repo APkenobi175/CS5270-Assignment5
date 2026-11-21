@@ -1,6 +1,7 @@
 # Unit tests for requestSources.py
 
 import boto3
+import pytest
 from moto import mock_aws
 
 from requestSources import S3RequestSourceStrategy, SQSRequestSourceStrategy
@@ -69,3 +70,94 @@ def testGetNextRequestReturnsSmallestKeyFirst():
         assert source.getNextRequest() == "second"
         assert source.getNextRequest() == "third"
         assert source.getNextRequest() is None
+
+        
+#----------------------------
+# SQSRequestSourceStrategy Tests
+#----------------------------
+
+def testSQSLooksUpQueueUrlFromName():
+    # Tests that the queue URL is found from just the queue name
+    with mock_aws():
+        sqsClient, queueUrl = makeQueue()
+        source = SQSRequestSourceStrategy(sqsClient, "test-requests", waitSeconds=0)
+
+        assert source.queueUrl == queueUrl
+
+
+def testSQSUnknownQueueRaises():
+    # Tests that a queue name that doesn't exist fails right away
+    with mock_aws():
+        sqsClient, queueUrl = makeQueue()
+
+        with pytest.raises(Exception):
+            SQSRequestSourceStrategy(sqsClient, "no-such-queue", waitSeconds=0)
+
+
+def testSQSGetNextRequestEmptyQueueReturnsNone():
+    # Tests that an empty queue returns None
+    with mock_aws():
+        sqsClient, queueUrl = makeQueue()
+        source = SQSRequestSourceStrategy(sqsClient, "test-requests", waitSeconds=0)
+
+        assert source.getNextRequest() is None
+
+
+
+def testSQSMessageNotDeletedUntilFinishRequest():
+    # Tests that the message stays in the queue until finishRequest is called
+    with mock_aws():
+        sqsClient, queueUrl = makeQueue()
+        sqsClient.send_message(QueueUrl=queueUrl, MessageBody="request")
+        source = SQSRequestSourceStrategy(sqsClient, "test-requests", waitSeconds=0)
+
+        source.getNextRequest()
+        assert countMessages(sqsClient, queueUrl) == 1
+
+        source.finishRequest()
+        assert countMessages(sqsClient, queueUrl) == 0
+
+
+def testSQSFinishRequestWithNoRequestDoesNothing():
+    # Tests that finishRequest before any request, or called twice, doesn't fail
+    with mock_aws():
+        sqsClient, queueUrl = makeQueue()
+        sqsClient.send_message(QueueUrl=queueUrl, MessageBody="request")
+        source = SQSRequestSourceStrategy(sqsClient, "test-requests", waitSeconds=0)
+
+        source.finishRequest()
+        source.getNextRequest()
+        source.finishRequest()
+        source.finishRequest()
+
+        assert source.currentReceiptHandle is None
+        assert countMessages(sqsClient, queueUrl) == 0
+
+
+
+def testSQSReadsAtMostTenAtATime():
+    # Tests that 15 messages take two receives (10 then 5) and all 15 come back exactly once
+    with mock_aws():
+        sqsClient, queueUrl = makeQueue()
+        for i in range(15):
+            sqsClient.send_message(QueueUrl=queueUrl, MessageBody=str(i))
+        source = SQSRequestSourceStrategy(sqsClient, "test-requests", waitSeconds=0)
+
+        # count how many times SQS is asked for messages
+        receiveCalls = []
+        originalReceive = source._receiveMessages
+        def countingReceive():
+            messages = originalReceive()
+            receiveCalls.append(len(messages))
+            return messages
+        source._receiveMessages = countingReceive
+
+        bodies = []
+        for i in range(15):
+            bodies.append(source.getNextRequest())
+            source.finishRequest()
+
+        assert receiveCalls == [10, 5]
+        assert sorted(bodies, key=int) == [str(i) for i in range(15)]
+        assert source.getNextRequest() is None
+        assert countMessages(sqsClient, queueUrl) == 0

@@ -68,7 +68,7 @@ class SQSRequestSourceStrategy(RequestSourceInterface):
 
         # 1. refill the cache if it's empty
         if len(self.cache) == 0:
-            self.cache = self.receiveMessages()
+            self.cache = self._receiveMessages()
             if len(self.cache) == 0:
                 return None
 
@@ -85,7 +85,7 @@ class SQSRequestSourceStrategy(RequestSourceInterface):
         self.sqsClient.delete_message(QueueUrl=self.queueUrl, ReceiptHandle=self.currentReceiptHandle)
         self.currentReceiptHandle = None
 
-    def receiveMessages(self):
+    def _receiveMessages(self):
         # Ask SQS for a batch of messages using long polling
         response = self.sqsClient.receive_message(QueueUrl=self.queueUrl, MaxNumberOfMessages=self.MAX_MESSAGES, WaitTimeSeconds=self.waitSeconds)
         messages = response.get("Messages", [])

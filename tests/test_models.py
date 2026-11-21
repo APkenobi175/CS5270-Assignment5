@@ -277,3 +277,123 @@ def testOtherAttributeToDict():
     # Tests that an OtherAttribute converts to a dict correctlu
     attr = OtherAttribute("color", "red")
     assert attr.toDict() == {"name": "color", "value": "red"}
+
+
+#----------------------------
+# Null label/description Tests (allowed for updates)
+#----------------------------
+
+def testFromDictNullLabelAndDescriptionAccepted():
+    # Tests that null label and description pass validation and come through as None
+    factory = WidgetRequestFactory()
+    data = makeRequestData()
+    data["type"] = "update"
+    data["label"] = None
+    data["description"] = None
+
+    request = factory.fromDict(data)
+
+    assert request.label is None
+    assert request.description is None
+
+
+#----------------------------
+# Widget.applyUpdate Tests (rules from HW6)
+#----------------------------
+
+def makeFullWidget():
+    # Build a widget with every field filled in
+    return Widget("widget-1", "Ammon Phipps", "My Label", "My Description",
+                  [OtherAttribute("color", "red"), OtherAttribute("size", "large")])
+
+
+def makeUpdate(label=None, description=None, otherAttributes=None, widgetId="widget-1", owner="Ammon Phipps"):
+    # Build an update request, anything not passed is left out (None)
+    return WidgetRequest("update", "req-2", widgetId, owner, label, description, otherAttributes)
+
+
+def attributesOf(widget):
+    # Turn a widget's other attributes into a dict so they're easy to compare
+    result = {}
+    for attr in widget.otherAttributes:
+        result[attr.name] = attr.value
+    return result
+
+
+def testApplyUpdateMissingValuesLeaveWidgetAlone():
+    # Tests that an update with nothing in it changes nothing
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate())
+
+    assert widget.toDict() == makeFullWidget().toDict()
+
+
+def testApplyUpdateChangesLabelAndDescription():
+    # Tests that new values replace the label and description
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate(label="New Label", description="New Description"))
+
+    assert widget.label == "New Label"
+    assert widget.description == "New Description"
+
+
+def testApplyUpdateEmptyStringClearsLabelAndDescription():
+    # Tests that an empty string sets the label and description to None
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate(label="", description=""))
+
+    assert widget.label is None
+    assert widget.description is None
+
+
+def testApplyUpdateChangesExistingOtherAttribute():
+    # Tests that an existing other attribute gets the new value and the rest are untouched
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate(otherAttributes=[OtherAttribute("color", "blue")]))
+
+    assert attributesOf(widget) == {"color": "blue", "size": "large"}
+
+
+def testApplyUpdateAddsNewOtherAttribute():
+    # Tests that an other attribute the widget doesn't have yet gets added
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate(otherAttributes=[OtherAttribute("weight", "heavy")]))
+
+    assert attributesOf(widget) == {"color": "red", "size": "large", "weight": "heavy"}
+
+
+def testApplyUpdateEmptyStringRemovesOtherAttribute():
+    # Tests that an empty string removes the other attribute
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate(otherAttributes=[OtherAttribute("color", "")]))
+
+    assert attributesOf(widget) == {"size": "large"}
+
+
+def testApplyUpdateNeverChangesIdOrOwner():
+    # Tests that the id and owner stay the same even if the request has different ones
+    widget = makeFullWidget()
+
+    widget.applyUpdate(makeUpdate(label="New Label", widgetId="other-id", owner="Someone Else"))
+
+    assert widget.widgetId == "widget-1"
+    assert widget.owner == "Ammon Phipps"
+
+
+#----------------------------
+# WidgetFactory fromJson Tests
+#----------------------------
+
+def testWidgetFactoryFromJsonRoundTrips():
+    # Tests that a widget turned into JSON and back has the same data
+    widget = makeFullWidget()
+
+    result = WidgetFactory().fromJson(widget.toJson())
+
+    assert result.toDict() == widget.toDict()

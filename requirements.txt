@@ -1,4 +1,4 @@
 boto3
 jsonschema
 pytest
-moto[s3,dynamodb]
+moto[s3,dynamodb,sqs]

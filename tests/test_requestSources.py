@@ -3,7 +3,24 @@
 import boto3
 from moto import mock_aws
 
-from requestSources import S3RequestSourceStrategy
+from requestSources import S3RequestSourceStrategy, SQSRequestSourceStrategy
+
+
+def makeQueue():
+    # Create a fake SQS client with an empty request queue (must be called inside mock_aws)
+    # Returns the client and the queue URL
+    sqsClient = boto3.client("sqs", region_name="us-east-1")
+    queueUrl = sqsClient.create_queue(QueueName="test-requests")["QueueUrl"]
+    return sqsClient, queueUrl
+
+
+def countMessages(sqsClient, queueUrl):
+    # Count messages still in the queue, including ones that are currently being processed
+    attrs = sqsClient.get_queue_attributes(
+        QueueUrl=queueUrl,
+        AttributeNames=["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"],
+    )["Attributes"]
+    return int(attrs["ApproximateNumberOfMessages"]) + int(attrs["ApproximateNumberOfMessagesNotVisible"])
 
 
 def makeBucket():

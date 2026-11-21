@@ -13,8 +13,9 @@ REQUEST_SCHEMA = {
         "requestId": {"type": "string"},
         "widgetId": {"type": "string"},
         "owner": {"type": "string", "pattern": "^[A-Za-z ]+$"},
-        "label": {"type": "string"},
-        "description": {"type": "string"},
+        # null is allowed here because HW6 says a null value in an update means "don't change it"
+        "label": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]},
         "otherAttributes": {
             "type": "array",
             "items": {
@@ -87,6 +88,33 @@ class Widget:
         # convert the object to a JSON string
         return json.dumps(self.toDict())
 
+    def applyUpdate(self, request):
+        # Change the widget using an update request (rules from HW6):
+        #  - missing or null value: leave the current value alone
+        #  - empty string: set label/description to null, or remove the other attribute
+        #  - anything else: set the new value
+        #  - id and owner never change
+        if request.label is not None:
+            self.label = request.label if request.label != "" else None
+        if request.description is not None:
+            self.description = request.description if request.description != "" else None
+
+        for change in request.otherAttributes:
+            self.updateOtherAttribute(change.name, change.value)
+
+    def updateOtherAttribute(self, name, value):
+        # Set, add, or remove (when value is "") a single other attribute
+        for attr in self.otherAttributes:
+            if attr.name == name:
+                if value == "":
+                    self.otherAttributes.remove(attr)
+                else:
+                    attr.value = value
+                return
+
+        if value != "":
+            self.otherAttributes.append(OtherAttribute(name, value))
+
 
 
 
@@ -102,6 +130,24 @@ class WidgetFactory:
             description=request.description,
             otherAttributes=list(request.otherAttributes),
         )
+
+    def fromDict(self, data):
+        # Build a Widget from the dict made by Widget.toDict (used to read widgets back out of S3)
+        otherAttributes = []
+        for attr in data.get("otherAttributes") or []:
+            otherAttributes.append(OtherAttribute(attr["name"], attr["value"]))
+
+        return Widget(
+            widgetId=data["id"],
+            owner=data["owner"],
+            label=data.get("label"),
+            description=data.get("description"),
+            otherAttributes=otherAttributes,
+        )
+
+    def fromJson(self, text):
+        # Build a Widget from the JSON made by Widget.toJson
+        return self.fromDict(json.loads(text))
 
 
 
